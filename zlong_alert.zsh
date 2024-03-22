@@ -43,7 +43,16 @@ zlong_alert_func() {
         if [[ "$OSTYPE" == "linux-gnu"* ]]; then
 	    eval notify-send $zlong_message
         elif [[ "$OSTYPE" == "darwin"* ]]; then
-            (alerter -timeout 3 -message $zlong_message &>/dev/null &)
+            subtitle="CMD: $cmd"
+            zlong_message=" TIME: $ftime"
+            (alerter \
+                -timeout 30 \
+                -title Alacritty \
+                -subtitle $subtitle \
+                -message $zlong_message \
+                -appIcon $HOME/bin/zlong_alert.zsh/alacritty.png \
+                &>/dev/null &)
+            say "Finished"
         fi
     fi
 
@@ -70,15 +79,15 @@ zlong_alert_post() {
     local cmd_head
 
     # Ignore leading spaces (-L) and command prefixes (like time and sudo)
-    typeset -L last_cmd_no_pfx="$zlong_last_cmd"
+    typeset -L last_cmd_no_pfx="$(expand_alias $zlong_last_cmd)"
     local no_pfx
     while [[ -n "$last_cmd_no_pfx" && -z "$no_pfx" ]]; do
- 	cmd_head="${last_cmd_no_pfx%% *}"
-	if [[ "$zlong_ignore_pfxs" =~ "(^|[[:space:]])${(q)cmd_head}([[:space:]]|$)" ]]; then
-	    last_cmd_no_pfx="${last_cmd_no_pfx#* }"
-	else
-	    no_pfx=true
-	fi
+        cmd_head="${last_cmd_no_pfx%% *}"
+        if [[ "$zlong_ignore_pfxs" =~ "(^|[[:space:]])${(q)cmd_head}([[:space:]]|$)" ]]; then
+            last_cmd_no_pfx="${last_cmd_no_pfx#* }"
+        else
+            no_pfx=true
+        fi
     done
 
     # Notify only if delay > $zlong_duration and command not ignored
@@ -86,6 +95,25 @@ zlong_alert_post() {
         zlong_alert_func "$zlong_last_cmd" "$duration"
     fi
     zlong_last_cmd=''
+}
+
+expand_alias_recursive() {
+    local command_and_args=(${(z)1})
+    local command_to_check="${command_and_args[1]}"
+    local alias_command=$(alias $command_to_check 2>/dev/null | sed "s/$command_to_check='//;s/'//")
+
+    if [ -n "$alias_command" ]; then
+        # 如果是别名，递归调用函数处理别名对应的实际命令
+        expand_alias_recursive "${alias_command#*=} ${command_and_args[2,-1]}"
+    else
+        # 如果不是别名，直接输出命令
+        echo "$command_to_check ${command_and_args[2,-1]}"
+    fi
+}
+
+expand_alias() {
+    # 调用递归函数处理别名
+    expand_alias_recursive "$1"
 }
 
 add-zsh-hook preexec zlong_alert_pre
